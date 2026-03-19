@@ -30,6 +30,8 @@
     .pct-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; min-width: 4.5em; text-align: center; }
     .pct-badge.up { background: rgba(198,40,40,0.12); color: #b71c1c; }
     .pct-badge.down { background: rgba(46,125,50,0.12); color: #1b5e20; }
+    .kline-wrap { margin-top: 4px; }
+    .kline-wrap svg { display: block; }
     .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
     .toolbar .meta { margin: 0; }
     .btn-sort { padding: 8px 14px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; }
@@ -135,9 +137,36 @@
         return Math.max(0, Math.min(100, pct)).toFixed(2);
       }
 
+      function klineSvg(kline) {
+        if (!Array.isArray(kline) || kline.length !== 3) return '';
+        const w = 90, h = 40, pad = 3;
+        const minP = Math.min(...kline.map(x => x[2]));
+        const maxP = Math.max(...kline.map(x => x[1]));
+        const range = Math.max(maxP - minP, 1e-8);
+        const y = p => pad + (1 - (p - minP) / range) * (h - 2 * pad);
+        const cw = (w - 2 * pad) / 3;
+        const bodyW = cw * 0.55;
+        let html = '';
+        kline.forEach((bar, i) => {
+          const [o, hi, lo, c] = bar;
+          const cx = pad + (i + 0.5) * cw;
+          const up = c >= o;
+          const color = up ? '#c62828' : '#2e7d32';
+          html += '<line x1="' + cx + '" y1="' + y(hi) + '" x2="' + cx + '" y2="' + y(lo) + '" stroke="' + color + '" stroke-width="1"/>';
+          const top = Math.min(y(o), y(c));
+          const bh = Math.abs(y(c) - y(o)) || 1;
+          html += '<rect x="' + (cx - bodyW / 2) + '" y="' + top + '" width="' + bodyW + '" height="' + bh + '" fill="' + color + '" stroke="' + color + '"/>';
+        });
+        return '<div class="kline-wrap"><svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' + html + '</svg></div>';
+      }
+
       function cellContent(col, row) {
         const val = row[col];
         if (col === '同花顺链接' && val) return '<a class="link" href="' + escapeHtml(val) + '" target="_blank" rel="noopener">查看</a>';
+        if (col === 'date_end') {
+          const dateText = escapeHtml(val === undefined || val === null ? '' : val);
+          return dateText + klineSvg(row.kline);
+        }
         if (col === 'score') return escapeHtml(scoreToPercent(val));
         if (col === '两月涨幅') {
           if (val == null || val === '' || isNaN(val)) return '—';
