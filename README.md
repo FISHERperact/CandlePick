@@ -8,7 +8,7 @@ Pin/V pattern stock screening with a static web viewer.
 - Data:
   - `data/pin_data.json`
   - `data/v_data.json`
-  - `data/results_展示200条.csv`
+  - `data/results_200.csv`
 
 This static site displays the first 200 records for each pattern (Pin and V) and can be deployed directly on Vercel without Flask.
 

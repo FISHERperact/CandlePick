@@ -26,8 +26,8 @@ SAMPLE_DIR = os.path.join(_EXAMPLES_DIR, "sample_results")
 STK_FACTOR_DIR = os.path.join(_EXAMPLES_DIR, "stk_factor")
 PIN_CSV = os.path.join(OUTPUTS_DIR, "pin_pattern_scan_result.csv")
 V_CSV = os.path.join(OUTPUTS_DIR, "v_pattern_scan_result.csv")
-PIN_SAMPLE_CSV = os.path.join(SAMPLE_DIR, "品字形_前200条.csv")
-V_SAMPLE_CSV = os.path.join(SAMPLE_DIR, "V字形_前200条.csv")
+PIN_SAMPLE_CSV = os.path.join(SAMPLE_DIR, "pin_top200.csv")
+V_SAMPLE_CSV = os.path.join(SAMPLE_DIR, "v_top200.csv")
 
 
 def _pin_csv_path():
