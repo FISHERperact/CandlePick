@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>品字形 / V字形 扫描结果</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: "Segoe UI", "PingFang SC", sans-serif; margin: 0; padding: 16px; background: #f5f5f5; }
+    h1 { margin-top: 0; color: #333; }
+    .meta { color: #666; font-size: 14px; margin-bottom: 16px; }
+    .tabs { margin-bottom: 16px; }
+    .tabs button { padding: 10px 24px; margin-right: 8px; font-size: 15px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; }
+    .tabs button:hover { background: #f0f0f0; }
+    .tabs button.active { background: #1976d2; color: #fff; border-color: #1976d2; }
+    section { background: #fff; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); overflow-x: auto; }
+    table { border-collapse: collapse; width: 100%; min-width: 800px; }
+    th, td { border: 1px solid #e0e0e0; padding: 10px 12px; text-align: left; }
+    th { background: #fafafa; font-weight: 600; color: #424242; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    tbody tr:hover { background: #f0f7ff; }
+    a.link { color: #1976d2; text-decoration: none; }
+    a.link:hover { text-decoration: underline; }
+    .pagination { margin-top: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+    .pagination button { padding: 8px 14px; border: 1px solid #ccc; background: #fff; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .pagination button:hover:not(:disabled) { background: #e0e0e0; }
+    .pagination button.current { background: #1976d2; color: #fff; border-color: #1976d2; }
+    .pagination .info { margin-left: 12px; color: #666; font-size: 14px; }
+    .empty-msg { color: #888; padding: 24px; text-align: center; }
+    .pct-badge { display: inline-block; padding: 4px 10px; border-radius: 6px; min-width: 4.5em; text-align: center; }
+    .pct-badge.up { background: rgba(198,40,40,0.12); color: #b71c1c; }
+    .pct-badge.down { background: rgba(46,125,50,0.12); color: #1b5e20; }
+    .toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+    .toolbar .meta { margin: 0; }
+    .btn-sort { padding: 8px 14px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .btn-sort:hover { background: #f0f0f0; }
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 100; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal-box { background: #fff; border-radius: 10px; padding: 20px; min-width: 280px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); }
+    .modal-box h3 { margin: 0 0 16px 0; font-size: 16px; color: #333; }
+    .modal-options { display: flex; flex-direction: column; gap: 8px; }
+    .modal-options label { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 6px; cursor: pointer; }
+    .modal-options label:hover { background: #f5f5f5; }
+    .modal-actions { margin-top: 16px; text-align: right; }
+    .modal-actions button { padding: 8px 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .modal-actions button.primary { background: #1976d2; color: #fff; border-color: #1976d2; }
+  </style>
+</head>
+<body>
+  <h1>形态选股结果</h1>
+  <p class="meta">静态展示数据为前 200 条样本；同花顺链接可直接跳转。 <a class="link" href="./data/results_展示200条.csv" download>下载展示 CSV</a></p>
+
+  <div class="tabs">
+    <button type="button" id="btn-pin" class="active">品字形（中间高、两头低）</button>
+    <button type="button" id="btn-v">V字形（中间低、两头高）</button>
+  </div>
+
+  <section>
+    <div class="toolbar">
+      <p class="meta" id="table-info">加载中...</p>
+      <button type="button" class="btn-sort" id="btn-sort">排序方式</button>
+    </div>
+    <div class="modal-overlay" id="sort-modal">
+      <div class="modal-box">
+        <h3>选择排序方式</h3>
+        <div class="modal-options" id="sort-options">
+          <label><input type="radio" name="sort" value="default" checked> 默认顺序</label>
+          <label><input type="radio" name="sort" value="gain_desc"> 按涨幅从高到低</label>
+          <label><input type="radio" name="sort" value="drop_desc"> 按跌幅从大到小</label>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="primary" id="sort-confirm">确定</button>
+        </div>
+      </div>
+    </div>
+    <table>
+      <thead id="table-head"><tr></tr></thead>
+      <tbody id="table-body"></tbody>
+    </table>
+    <div class="pagination" id="pagination"></div>
+  </section>
+
+  <script>
+    (async function() {
+      const PAGE_SIZE = 20;
+      const COL_LABELS = { stock_code: '股票代码', date_start: '开始日期', date_end: '结束日期', score: '相似度' };
+      const SORT_LABELS = { default: '默认顺序', gain_desc: '按涨幅从高到低', drop_desc: '按跌幅从大到小' };
+
+      const [pinResp, vResp] = await Promise.all([
+        fetch('./data/pin_data.json'),
+        fetch('./data/v_data.json')
+      ]);
+      const pinJson = await pinResp.json();
+      const vJson = await vResp.json();
+
+      const PIN_DATA = pinJson.data || [];
+      const V_DATA = vJson.data || [];
+      const COLUMNS_PIN = pinJson.columns || [];
+      const COLUMNS_V = vJson.columns || [];
+
+      let mode = 'pin';
+      let page = 1;
+      let sortBy = 'default';
+      let scoreMin = 0, scoreMax = 100;
+
+      function getData() { return mode === 'pin' ? PIN_DATA : V_DATA; }
+      function getColumns() { return mode === 'pin' ? COLUMNS_PIN : COLUMNS_V; }
+
+      function getSortedData() {
+        const data = getData();
+        if (sortBy === 'default') return data.slice();
+        const key = '两月涨幅';
+        return data.slice().sort(function(a, b) {
+          const na = (a[key] != null && a[key] !== '' && !isNaN(Number(a[key]))) ? Number(a[key]) : null;
+          const nb = (b[key] != null && b[key] !== '' && !isNaN(Number(b[key]))) ? Number(b[key]) : null;
+          if (na == null && nb == null) return 0;
+          if (na == null) return 1;
+          if (nb == null) return -1;
+          if (sortBy === 'gain_desc') return nb - na;
+          return na - nb;
+        });
+      }
+
+      function colDisplayName(col) { return COL_LABELS[col] != null ? COL_LABELS[col] : col; }
+      function escapeHtml(s) {
+        if (s == null) return '';
+        const div = document.createElement('div');
+        div.textContent = String(s);
+        return div.innerHTML;
+      }
+      function scoreToPercent(raw) {
+        if (raw == null || isNaN(raw)) return '';
+        const range = scoreMax - scoreMin;
+        const pct = range <= 0 ? 100 : ((raw - scoreMin) / range) * 100;
+        return Math.max(0, Math.min(100, pct)).toFixed(2);
+      }
+
+      function cellContent(col, row) {
+        const val = row[col];
+        if (col === '同花顺链接' && val) return '<a class="link" href="' + escapeHtml(val) + '" target="_blank" rel="noopener">查看</a>';
+        if (col === 'score') return escapeHtml(scoreToPercent(val));
+        if (col === '两月涨幅') {
+          if (val == null || val === '' || isNaN(val)) return '—';
+          const n = Number(val);
+          const badgeCls = n >= 0 ? 'pct-badge up' : 'pct-badge down';
+          const sign = n >= 0 ? '+' : '';
+          return '<span class="' + badgeCls + '">' + sign + n.toFixed(2) + '%</span>';
+        }
+        return escapeHtml(val === undefined || val === null ? '' : val);
+      }
+
+      function renderHead() {
+        const cols = getColumns();
+        document.getElementById('table-head').innerHTML =
+          '<tr>' + cols.map(c => '<th>' + escapeHtml(colDisplayName(c)) + '</th>').join('') + '</tr>';
+      }
+
+      function renderBody() {
+        const data = getSortedData();
+        const cols = getColumns();
+        const total = data.length;
+        const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+        const p = Math.max(1, Math.min(page, totalPages));
+        const start = (p - 1) * PAGE_SIZE;
+        const slice = data.slice(start, start + PAGE_SIZE);
+
+        const scores = data.map(r => r.score).filter(x => x != null && !isNaN(x));
+        scoreMin = scores.length ? Math.min(...scores) : 0;
+        scoreMax = scores.length ? Math.max(...scores) : 100;
+
+        const tbody = document.getElementById('table-body');
+        if (slice.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="' + (cols.length || 1) + '" class="empty-msg">暂无数据</td></tr>';
+        } else {
+          tbody.innerHTML = slice.map(row =>
+            '<tr>' + cols.map(col => '<td>' + cellContent(col, row) + '</td>').join('') + '</tr>'
+          ).join('');
+        }
+        document.getElementById('table-info').textContent =
+          '共 ' + total + ' 条，当前第 ' + (start + 1) + '–' + (start + slice.length) + ' 条';
+        renderPagination(total, totalPages, p);
+      }
+
+      function renderPagination(total, totalPages, p) {
+        const bar = document.getElementById('pagination');
+        if (total === 0) return (bar.innerHTML = '');
+        const prev = '<button type="button" id="page-prev">上一页</button>';
+        const next = '<button type="button" id="page-next">下一页</button>';
+        let nums = '';
+        const show = 7;
+        let from = Math.max(1, p - Math.floor(show / 2));
+        let to = Math.min(totalPages, from + show - 1);
+        if (to - from + 1 < show) from = Math.max(1, to - show + 1);
+        for (let i = from; i <= to; i++) nums += '<button type="button" class="page-num' + (i === p ? ' current' : '') + '" data-page="' + i + '">' + i + '</button>';
+        bar.innerHTML = prev + nums + next + '<span class="info">第 ' + p + ' / ' + totalPages + ' 页</span>';
+        document.getElementById('page-prev').onclick = () => { if (p > 1) { page = p - 1; renderBody(); } };
+        document.getElementById('page-next').onclick = () => { if (p < totalPages) { page = p + 1; renderBody(); } };
+        bar.querySelectorAll('.page-num').forEach(btn => btn.onclick = () => { page = parseInt(btn.dataset.page, 10); renderBody(); });
+      }
+
+      function switchMode(m) {
+        mode = m;
+        page = 1;
+        document.getElementById('btn-pin').classList.toggle('active', mode === 'pin');
+        document.getElementById('btn-v').classList.toggle('active', mode === 'v');
+        renderHead();
+        renderBody();
+      }
+      document.getElementById('btn-pin').onclick = () => switchMode('pin');
+      document.getElementById('btn-v').onclick = () => switchMode('v');
+
+      (function initSortModal() {
+        const overlay = document.getElementById('sort-modal');
+        const btnSort = document.getElementById('btn-sort');
+        const options = document.getElementById('sort-options');
+        const confirmBtn = document.getElementById('sort-confirm');
+        function updateSortLabel() { btnSort.textContent = '排序：' + (SORT_LABELS[sortBy] || sortBy); }
+        btnSort.onclick = function() {
+          options.querySelectorAll('input[name="sort"]').forEach(radio => radio.checked = radio.value === sortBy);
+          overlay.classList.add('show');
+        };
+        overlay.onclick = e => { if (e.target === overlay) overlay.classList.remove('show'); };
+        confirmBtn.onclick = function() {
+          const checked = options.querySelector('input[name="sort"]:checked');
+          if (checked) { sortBy = checked.value; page = 1; updateSortLabel(); renderBody(); }
+          overlay.classList.remove('show');
+        };
+        updateSortLabel();
+      })();
+
+      renderHead();
+      renderBody();
+    })();
+  </script>
+</body>
+</html>
