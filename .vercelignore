@@ -1,0 +1,5 @@
+examples/**
+.git/**
+*.py
+*.pyc
+__pycache__/
